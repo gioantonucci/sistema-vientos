@@ -1,5 +1,6 @@
 const STORAGE_KEY = "vientos-del-sur-mvp";
 const AUTH_KEY = "vientos-del-sur-auth";
+const REMOTE_READY_KEY = "vientos-del-sur-remote-ready";
 
 const disciplines = ["Psicología", "Psicopedagogía", "Fonoaudiología", "Terapia ocupacional", "Nutrición", "Orientación familiar"];
 const patientStates = ["activo", "en_evaluacion", "pausado", "alta", "inactivo"];
@@ -303,8 +304,8 @@ function loadState() {
     section: "dashboard",
     selectedDate: todayIso,
     agendaMonth: currentMonth,
-    patients: structuredClone(defaultPatients),
-    professionals: structuredClone(defaultProfessionals),
+    patients: localStorage.getItem(REMOTE_READY_KEY) ? [] : structuredClone(defaultPatients),
+    professionals: localStorage.getItem(REMOTE_READY_KEY) ? [] : structuredClone(defaultProfessionals),
     appointments: structuredClone(defaultAppointments),
     payments: structuredClone(defaultPayments),
     notes: structuredClone(defaultNotes),
@@ -508,6 +509,43 @@ function applySupabaseSession(sessionUser) {
   saveSession(user);
   saveState();
   renderAuth();
+  loadRemoteDirectoryData();
+}
+
+async function loadRemoteDirectoryData() {
+  try {
+    const [professionalsResult, patientsResult] = await Promise.all([
+      apiRequest("/api/legacy/professionals"),
+      apiRequest("/api/legacy/patients"),
+    ]);
+
+    state.professionals = professionalsResult.professionals || [];
+    state.patients = patientsResult.patients || [];
+    localStorage.setItem(REMOTE_READY_KEY, "true");
+    normalizeState();
+    render();
+  } catch (error) {
+    console.error(error);
+    showSystemError("No se pudieron cargar profesionales y pacientes desde Supabase.");
+  }
+}
+
+async function apiRequest(path, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || "Error de conexión con Supabase");
+  return payload;
+}
+
+function showSystemError(message) {
+  if (els.loginError && !state.currentUser) els.loginError.textContent = message;
+  else alert(message);
 }
 
 function renderAuth() {
@@ -931,7 +969,7 @@ function openPatientDialog(id) {
   qs("#patientDialog").showModal();
 }
 
-function savePatient(event) {
+async function savePatient(event) {
   event.preventDefault();
   if (!canEdit("patients")) return;
   const id = qs("#patientId").value || createId();
@@ -956,26 +994,41 @@ function savePatient(event) {
     fechaCreacion: getPatient(id)?.fechaCreacion || todayIso,
     fechaActualizacion: todayIso,
   };
-  upsert(state.patients, next);
-  qs("#patientDialog").close();
-  saveState();
-  render();
+  try {
+    const saved = await apiRequest("/api/legacy/patients", {
+      method: "POST",
+      body: JSON.stringify(next),
+    });
+    upsert(state.patients, saved.patient || next);
+    qs("#patientDialog").close();
+    saveState();
+    render();
+  } catch (error) {
+    console.error(error);
+    showSystemError(error.message || "No se pudo guardar el paciente.");
+  }
 }
 
-function deletePatient() {
+async function deletePatient() {
   const id = qs("#patientId").value;
   if (!id || !canEdit("patients")) return;
   if (state.appointments.some((appointment) => appointment.pacienteId === id)) {
     alert("No se puede eliminar un paciente con turnos asociados.");
     return;
   }
-  state.patients = state.patients.filter((patient) => patient.id !== id);
-  state.notes = state.notes.filter((note) => note.pacienteId !== id);
-  state.documents = state.documents.filter((document) => document.pacienteId !== id);
-  state.payments = state.payments.filter((payment) => payment.pacienteId !== id);
-  qs("#patientDialog").close();
-  saveState();
-  render();
+  try {
+    await apiRequest(`/api/legacy/patients?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    state.patients = state.patients.filter((patient) => patient.id !== id);
+    state.notes = state.notes.filter((note) => note.pacienteId !== id);
+    state.documents = state.documents.filter((document) => document.pacienteId !== id);
+    state.payments = state.payments.filter((payment) => payment.pacienteId !== id);
+    qs("#patientDialog").close();
+    saveState();
+    render();
+  } catch (error) {
+    console.error(error);
+    showSystemError(error.message || "No se pudo eliminar el paciente.");
+  }
 }
 
 function openPatientFile(id) {
@@ -1057,7 +1110,7 @@ function openProfessionalDialog(id) {
   qs("#professionalDialog").showModal();
 }
 
-function saveProfessional(event) {
+async function saveProfessional(event) {
   event.preventDefault();
   if (!canEdit("professionals")) return;
   const id = qs("#professionalId").value || createId();
@@ -1077,23 +1130,38 @@ function saveProfessional(event) {
     observaciones: qs("#professionalObservations").value.trim(),
     color: qs("#professionalColor").value,
   };
-  upsert(state.professionals, next);
-  qs("#professionalDialog").close();
-  saveState();
-  render();
+  try {
+    const saved = await apiRequest("/api/legacy/professionals", {
+      method: "POST",
+      body: JSON.stringify(next),
+    });
+    upsert(state.professionals, saved.professional || next);
+    qs("#professionalDialog").close();
+    saveState();
+    render();
+  } catch (error) {
+    console.error(error);
+    showSystemError(error.message || "No se pudo guardar el profesional.");
+  }
 }
 
-function deleteProfessional() {
+async function deleteProfessional() {
   const id = qs("#professionalId").value;
   if (!id || !canEdit("professionals")) return;
   if (state.appointments.some((appointment) => appointment.profesionalId === id) || state.patients.some((patient) => patient.profesionalesAsignados.includes(id))) {
     alert("No se puede eliminar un profesional vinculado a pacientes o turnos.");
     return;
   }
-  state.professionals = state.professionals.filter((professional) => professional.id !== id);
-  qs("#professionalDialog").close();
-  saveState();
-  render();
+  try {
+    await apiRequest(`/api/legacy/professionals?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    state.professionals = state.professionals.filter((professional) => professional.id !== id);
+    qs("#professionalDialog").close();
+    saveState();
+    render();
+  } catch (error) {
+    console.error(error);
+    showSystemError(error.message || "No se pudo eliminar el profesional.");
+  }
 }
 
 function openAppointmentDialog(id) {
