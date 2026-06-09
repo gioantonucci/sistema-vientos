@@ -306,7 +306,7 @@ function loadState() {
     agendaMonth: currentMonth,
     patients: localStorage.getItem(REMOTE_READY_KEY) ? [] : structuredClone(defaultPatients),
     professionals: localStorage.getItem(REMOTE_READY_KEY) ? [] : structuredClone(defaultProfessionals),
-    appointments: structuredClone(defaultAppointments),
+    appointments: localStorage.getItem(REMOTE_READY_KEY) ? [] : structuredClone(defaultAppointments),
     payments: structuredClone(defaultPayments),
     notes: structuredClone(defaultNotes),
     documents: structuredClone(defaultDocuments),
@@ -514,13 +514,15 @@ function applySupabaseSession(sessionUser) {
 
 async function loadRemoteDirectoryData() {
   try {
-    const [professionalsResult, patientsResult] = await Promise.all([
+    const [professionalsResult, patientsResult, appointmentsResult] = await Promise.all([
       apiRequest("/api/legacy/professionals"),
       apiRequest("/api/legacy/patients"),
+      apiRequest("/api/legacy/appointments"),
     ]);
 
     state.professionals = professionalsResult.professionals || [];
     state.patients = patientsResult.patients || [];
+    state.appointments = appointmentsResult.appointments || [];
     localStorage.setItem(REMOTE_READY_KEY, "true");
     normalizeState();
     render();
@@ -1184,7 +1186,7 @@ function openAppointmentDialog(id) {
   qs("#appointmentDialog").showModal();
 }
 
-function saveAppointment(event) {
+async function saveAppointment(event) {
   event.preventDefault();
   if (!canEdit("appointments")) return;
   const id = qs("#appointmentId").value || createId();
@@ -1211,27 +1213,50 @@ function saveAppointment(event) {
     qs("#appointmentError").textContent = "Ese profesional ya tiene un turno superpuesto.";
     return;
   }
-  upsert(state.appointments, next);
-  syncPaymentForAppointment(next);
-  state.selectedDate = next.fecha;
-  state.agendaMonth = next.fecha.slice(0, 7);
-  qs("#appointmentDialog").close();
-  saveState();
-  render();
+  try {
+    const saved = await apiRequest("/api/legacy/appointments", {
+      method: "POST",
+      body: JSON.stringify(next),
+    });
+    const savedAppointment = saved.appointment || next;
+    upsert(state.appointments, savedAppointment);
+    syncPaymentForAppointment(savedAppointment);
+    state.selectedDate = savedAppointment.fecha;
+    state.agendaMonth = savedAppointment.fecha.slice(0, 7);
+    qs("#appointmentDialog").close();
+    saveState();
+    render();
+  } catch (error) {
+    console.error(error);
+    qs("#appointmentError").textContent = error.message || "No se pudo guardar el turno.";
+  }
 }
 
-function cancelAppointment() {
+async function cancelAppointment() {
   const id = qs("#appointmentId").value;
   const appointment = state.appointments.find((item) => item.id === id);
   if (!appointment || !canEdit("appointments")) return;
-  appointment.estado = "cancelado";
-  appointment.estadoPago = "cancelado";
-  state.payments.filter((payment) => payment.turnoId === id).forEach((payment) => {
-    payment.estado = "cancelado";
-  });
-  qs("#appointmentDialog").close();
-  saveState();
-  render();
+  try {
+    const saved = await apiRequest("/api/legacy/appointments", {
+      method: "PATCH",
+      body: JSON.stringify({
+        ...appointment,
+        estado: "cancelado",
+        estadoPago: "cancelado",
+      }),
+    });
+    const savedAppointment = saved.appointment || { ...appointment, estado: "cancelado", estadoPago: "cancelado" };
+    upsert(state.appointments, savedAppointment);
+    state.payments.filter((payment) => payment.turnoId === id).forEach((payment) => {
+      payment.estado = "cancelado";
+    });
+    qs("#appointmentDialog").close();
+    saveState();
+    render();
+  } catch (error) {
+    console.error(error);
+    qs("#appointmentError").textContent = error.message || "No se pudo cancelar el turno.";
+  }
 }
 
 function openPaymentDialog(id) {
