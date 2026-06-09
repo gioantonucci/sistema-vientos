@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vientos del Sur - Gestión interna</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <section class="login-screen" id="loginScreen" aria-label="Ingreso al sistema">
+      <form class="login-card" id="loginForm">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">VS</div>
+          <div>
+            <h1>Vientos del Sur</h1>
+            <p>Gestión interna terapéutica</p>
+          </div>
+        </div>
+
+        <label>
+          Usuario
+          <input id="loginUser" type="text" autocomplete="username" required />
+        </label>
+        <label>
+          Contraseña
+          <input id="loginPassword" type="password" autocomplete="current-password" required />
+        </label>
+        <p class="form-error" id="loginError" role="alert"></p>
+        <button class="primary-button" type="submit">Ingresar</button>
+
+        <div class="login-help">
+          <strong>Usuarios de prueba</strong>
+          <span>admin / admin123</span>
+          <span>coordinacion / coord123</span>
+          <span>molina / pro123</span>
+          <span>lectura / leer123</span>
+        </div>
+      </form>
+    </section>
+
+    <div class="app-shell hidden" id="appShell">
+      <header class="mobile-navbar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">VS</div>
+          <div>
+            <h1>Vientos del Sur</h1>
+            <p id="mobileSessionRole">Gestión interna</p>
+          </div>
+        </div>
+        <button class="menu-button" id="menuToggle" type="button" aria-label="Abrir menú" aria-controls="mainMenu" aria-expanded="false" data-testid="menu-toggle">
+          <span aria-hidden="true"></span>
+          <span aria-hidden="true"></span>
+          <span aria-hidden="true"></span>
+        </button>
+      </header>
+
+      <aside class="sidebar" aria-label="Navegación principal">
+        <div class="brand sidebar-brand">
+          <div class="brand-mark" aria-hidden="true">VS</div>
+          <div>
+            <h1>Vientos del Sur</h1>
+            <p>City Bell, La Plata</p>
+          </div>
+        </div>
+
+        <nav class="side-nav" id="mainMenu" aria-label="Secciones">
+          <button class="nav-button is-active" data-section="dashboard" type="button">Dashboard</button>
+          <button class="nav-button" data-section="agenda" type="button">Agenda</button>
+          <button class="nav-button" data-section="patients" type="button">Pacientes</button>
+          <button class="nav-button" data-section="professionals" type="button">Profesionales</button>
+          <button class="nav-button" data-section="payments" type="button">Pagos</button>
+          <button class="nav-button" data-section="users" type="button">Roles</button>
+        </nav>
+
+        <section class="session-card" aria-label="Sesión activa">
+          <div>
+            <strong id="sessionName">Usuario</strong>
+            <span id="sessionRole">Rol</span>
+          </div>
+          <button class="secondary-button compact" id="logoutButton" type="button">Salir</button>
+        </section>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow" id="sectionEyebrow">Gestión interna</p>
+            <h2 id="sectionTitle">Dashboard</h2>
+          </div>
+          <div class="top-actions" id="topActions">
+            <button class="primary-button" data-action="new-patient" type="button">Crear paciente</button>
+            <button class="secondary-button" data-action="new-appointment" type="button">Crear turno</button>
+            <button class="secondary-button" data-action="new-payment" type="button">Registrar pago</button>
+          </div>
+        </header>
+
+        <section class="page" id="dashboardPage" data-page="dashboard" aria-label="Dashboard"></section>
+
+        <section class="page hidden" id="agendaPage" data-page="agenda" aria-label="Agenda">
+          <section class="toolbar">
+            <label>
+              Día
+              <input id="agendaDate" type="date" />
+            </label>
+            <label>
+              Profesional
+              <select id="agendaProfessionalFilter"></select>
+            </label>
+            <label>
+              Disciplina
+              <select id="agendaDisciplineFilter"></select>
+            </label>
+          </section>
+          <section class="agenda-layout">
+            <aside class="calendar-card" aria-label="Calendario de agenda">
+              <header class="calendar-header">
+                <button class="icon-button" id="prevAgendaMonth" type="button" aria-label="Mes anterior">‹</button>
+                <div>
+                  <p class="eyebrow">Calendario</p>
+                  <h3 id="agendaMonthLabel">Mes</h3>
+                </div>
+                <button class="icon-button" id="nextAgendaMonth" type="button" aria-label="Mes siguiente">›</button>
+              </header>
+              <div class="calendar-weekdays" aria-hidden="true">
+                <span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span>
+              </div>
+              <div class="calendar-grid" id="agendaCalendarGrid"></div>
+            </aside>
+            <section class="agenda-board" id="agendaBoard"></section>
+          </section>
+        </section>
+
+        <section class="page hidden" id="patientsPage" data-page="patients" aria-label="Pacientes">
+          <section class="toolbar patients-toolbar">
+            <label>
+              Buscar
+              <input id="patientSearch" type="search" placeholder="Nombre, apellido, DNI o responsable" />
+            </label>
+            <label>
+              Estado
+              <select id="patientStatusFilter"></select>
+            </label>
+            <label>
+              Disciplina
+              <select id="patientDisciplineFilter"></select>
+            </label>
+            <label>
+              Profesional
+              <select id="patientProfessionalFilter"></select>
+            </label>
+          </section>
+          <section class="summary-grid patient-state-summary" id="patientStateSummary"></section>
+          <section class="table-card" id="patientsTable"></section>
+        </section>
+
+        <section class="page hidden" id="professionalsPage" data-page="professionals" aria-label="Profesionales">
+          <section class="toolbar">
+            <label>
+              Buscar
+              <input id="professionalSearch" type="search" placeholder="Nombre, disciplina, matrícula o email" />
+            </label>
+            <label>
+              Estado
+              <select id="professionalStatusFilter"></select>
+            </label>
+            <label>
+              Disciplina
+              <select id="professionalDisciplineFilter"></select>
+            </label>
+            <label>
+              Obra social
+              <select id="professionalInsuranceFilter"></select>
+            </label>
+          </section>
+          <section class="cards-grid" id="professionalsGrid"></section>
+        </section>
+
+        <section class="page hidden" id="paymentsPage" data-page="payments" aria-label="Pagos">
+          <section class="toolbar payments-toolbar">
+            <label>
+              Buscar
+              <input id="paymentSearch" type="search" placeholder="Paciente o profesional" />
+            </label>
+            <label>
+              Estado
+              <select id="paymentStatusFilter"></select>
+            </label>
+            <label>
+              Profesional
+              <select id="paymentProfessionalFilter"></select>
+            </label>
+            <label>
+              Período
+              <input id="paymentMonthFilter" type="month" />
+            </label>
+          </section>
+          <section class="summary-grid" id="paymentSummary"></section>
+          <section class="table-card" id="paymentsTable"></section>
+        </section>
+
+        <section class="page hidden" id="usersPage" data-page="users" aria-label="Roles y permisos"></section>
+      </main>
+    </div>
+
+    <dialog class="modal" id="patientDialog">
+      <form class="modal-card" id="patientForm" method="dialog">
+        <header class="modal-header">
+          <div>
+            <p class="eyebrow">Paciente</p>
+            <h2 id="patientDialogTitle">Nuevo paciente</h2>
+          </div>
+          <button class="icon-button" data-close="patientDialog" type="button" aria-label="Cerrar">×</button>
+        </header>
+        <input id="patientId" type="hidden" />
+        <div class="form-grid">
+          <label>Nombre<input id="patientFirstName" required /></label>
+          <label>Apellido<input id="patientLastName" required /></label>
+          <label>Fecha de nacimiento<input id="patientBirthDate" type="date" /></label>
+          <label>DNI<input id="patientDni" /></label>
+          <label>Teléfono<input id="patientPhone" type="tel" /></label>
+          <label>Email<input id="patientEmail" type="email" /></label>
+          <label class="wide">Dirección<input id="patientAddress" /></label>
+          <label>Responsable<input id="patientResponsibleName" /></label>
+          <label>Vínculo<input id="patientResponsibleLink" /></label>
+          <label>Teléfono responsable<input id="patientResponsiblePhone" type="tel" /></label>
+          <label>Disciplina principal<select id="patientMainDiscipline"></select></label>
+          <label>Estado<select id="patientState"></select></label>
+          <label class="wide">Profesionales asignados<select id="patientAssignedProfessionals" multiple></select></label>
+          <label class="wide">Motivo de consulta<textarea id="patientReason" rows="3"></textarea></label>
+          <label class="wide">Observaciones<textarea id="patientObservations" rows="3"></textarea></label>
+        </div>
+        <div class="modal-actions">
+          <button class="danger-button" id="deletePatientButton" type="button">Eliminar</button>
+          <div class="action-row">
+            <button class="secondary-button" data-close="patientDialog" type="button">Cancelar</button>
+            <button class="primary-button" type="submit">Guardar</button>
+          </div>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="modal wide-modal" id="patientFileDialog">
+      <section class="modal-card" id="patientFileContent"></section>
+    </dialog>
+
+    <dialog class="modal" id="professionalDialog">
+      <form class="modal-card" id="professionalForm" method="dialog">
+        <header class="modal-header">
+          <div>
+            <p class="eyebrow">Profesional</p>
+            <h2 id="professionalDialogTitle">Nuevo profesional</h2>
+          </div>
+          <button class="icon-button" data-close="professionalDialog" type="button" aria-label="Cerrar">×</button>
+        </header>
+        <input id="professionalId" type="hidden" />
+        <div class="form-grid">
+          <label>Nombre<input id="professionalFirstName" required /></label>
+          <label>Apellido<input id="professionalLastName" required /></label>
+          <label>Disciplina<select id="professionalDiscipline"></select></label>
+          <label>Matrícula<input id="professionalLicense" /></label>
+          <label>Teléfono<input id="professionalPhone" type="tel" /></label>
+          <label>Email<input id="professionalEmail" type="email" /></label>
+          <label>Estado<select id="professionalState"></select></label>
+          <label class="wide">Especialidades<input id="professionalSpecialties" placeholder="Separadas por coma" /></label>
+          <label class="wide">Obras sociales<input id="professionalInsurances" placeholder="Particular, IOMA, OSDE..." /></label>
+          <label>Días de atención<input id="professionalDays" placeholder="Lunes, miércoles" /></label>
+          <label>Horarios<input id="professionalHours" placeholder="09:00 a 18:00" /></label>
+          <label>Color<input id="professionalColor" type="color" value="#2f6f6a" /></label>
+          <label class="wide">Observaciones<textarea id="professionalObservations" rows="3"></textarea></label>
+        </div>
+        <div class="modal-actions">
+          <button class="danger-button" id="deleteProfessionalButton" type="button">Eliminar</button>
+          <div class="action-row">
+            <button class="secondary-button" data-close="professionalDialog" type="button">Cancelar</button>
+            <button class="primary-button" type="submit">Guardar</button>
+          </div>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="appointmentDialog">
+      <form class="modal-card" id="appointmentForm" method="dialog">
+        <header class="modal-header">
+          <div>
+            <p class="eyebrow">Turno</p>
+            <h2 id="appointmentDialogTitle">Nuevo turno</h2>
+          </div>
+          <button class="icon-button" data-close="appointmentDialog" type="button" aria-label="Cerrar">×</button>
+        </header>
+        <input id="appointmentId" type="hidden" />
+        <div class="form-grid">
+          <label>Paciente<select id="appointmentPatient" required></select></label>
+          <label>Profesional<select id="appointmentProfessional" required></select></label>
+          <label>Fecha<input id="appointmentDate" type="date" required /></label>
+          <label>Inicio<input id="appointmentStart" type="time" required /></label>
+          <label>Fin<input id="appointmentEnd" type="time" required /></label>
+          <label>Disciplina<select id="appointmentDiscipline"></select></label>
+          <label>Estado<select id="appointmentState"></select></label>
+          <label>Estado de pago<select id="appointmentPaymentState"></select></label>
+          <label class="wide">Observaciones<textarea id="appointmentObservations" rows="3"></textarea></label>
+        </div>
+        <p class="form-error" id="appointmentError" role="alert"></p>
+        <div class="modal-actions">
+          <button class="danger-button" id="cancelAppointmentButton" type="button">Cancelar turno</button>
+          <div class="action-row">
+            <button class="secondary-button" data-close="appointmentDialog" type="button">Cerrar</button>
+            <button class="primary-button" type="submit">Guardar</button>
+          </div>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="paymentDialog">
+      <form class="modal-card" id="paymentForm" method="dialog">
+        <header class="modal-header">
+          <div>
+            <p class="eyebrow">Pago</p>
+            <h2 id="paymentDialogTitle">Registrar pago</h2>
+          </div>
+          <button class="icon-button" data-close="paymentDialog" type="button" aria-label="Cerrar">×</button>
+        </header>
+        <input id="paymentId" type="hidden" />
+        <div class="form-grid">
+          <label>Paciente<select id="paymentPatient" required></select></label>
+          <label>Profesional<select id="paymentProfessional" required></select></label>
+          <label>Turno<select id="paymentAppointment"></select></label>
+          <label>Fecha de sesión<input id="paymentSessionDate" type="date" required /></label>
+          <label>Diferencial paciente<input id="paymentAmount" type="number" min="0" step="100" required /></label>
+          <label>Obra social<input id="paymentInsurance" placeholder="Particular, IOMA, OSDE..." /></label>
+          <label>Obra social paga al profesional<input id="paymentCoveredAmount" type="number" min="0" step="100" /></label>
+          <label>Estado<select id="paymentState"></select></label>
+          <label>Medio de pago<select id="paymentMethod"></select></label>
+          <label>Fecha de pago<input id="paymentDate" type="date" /></label>
+          <label class="wide">Observaciones<textarea id="paymentObservations" rows="3"></textarea></label>
+        </div>
+        <div class="modal-actions">
+          <button class="danger-button" id="deletePaymentButton" type="button">Eliminar</button>
+          <div class="action-row">
+            <button class="secondary-button" data-close="paymentDialog" type="button">Cancelar</button>
+            <button class="primary-button" type="submit">Guardar</button>
+          </div>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="noteDialog">
+      <form class="modal-card" id="noteForm" method="dialog">
+        <header class="modal-header">
+          <div>
+            <p class="eyebrow">Seguimiento</p>
+            <h2 id="noteDialogTitle">Nueva nota</h2>
+          </div>
+          <button class="icon-button" data-close="noteDialog" type="button" aria-label="Cerrar">×</button>
+        </header>
+        <input id="noteId" type="hidden" />
+        <input id="notePatientId" type="hidden" />
+        <div class="form-grid">
+          <label>Profesional<select id="noteProfessional" required></select></label>
+          <label>Fecha<input id="noteDate" type="date" required /></label>
+          <label>Tipo<select id="noteType"></select></label>
+          <label>Visibilidad<select id="noteVisibility"></select></label>
+          <label class="wide">Nota<textarea id="noteText" rows="6" required></textarea></label>
+          <label class="wide">Archivos adjuntos<input id="noteFiles" placeholder="Nombres o rutas, separados por coma" /></label>
+        </div>
+        <div class="modal-actions end">
+          <div class="action-row">
+            <button class="secondary-button" data-close="noteDialog" type="button">Cancelar</button>
+            <button class="primary-button" type="submit">Guardar</button>
+          </div>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="documentDialog">
+      <form class="modal-card" id="documentForm" method="dialog">
+        <header class="modal-header">
+          <div>
+            <p class="eyebrow">Documento</p>
+            <h2 id="documentDialogTitle">Nuevo documento</h2>
+          </div>
+          <button class="icon-button" data-close="documentDialog" type="button" aria-label="Cerrar">×</button>
+        </header>
+        <input id="documentId" type="hidden" />
+        <input id="documentPatientId" type="hidden" />
+        <div class="form-grid">
+          <label>Nombre<input id="documentName" required /></label>
+          <label>Tipo<select id="documentType"></select></label>
+          <label class="wide">Ruta o URL<input id="documentPath" placeholder="Preparado para integrar backend de archivos" /></label>
+        </div>
+        <div class="modal-actions">
+          <button class="danger-button" id="deleteDocumentButton" type="button">Eliminar</button>
+          <div class="action-row">
+            <button class="secondary-button" data-close="documentDialog" type="button">Cancelar</button>
+            <button class="primary-button" type="submit">Guardar</button>
+          </div>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="app.js"></script>
+  </body>
+</html>
