@@ -308,8 +308,8 @@ function loadState() {
     professionals: localStorage.getItem(REMOTE_READY_KEY) ? [] : structuredClone(defaultProfessionals),
     appointments: localStorage.getItem(REMOTE_READY_KEY) ? [] : structuredClone(defaultAppointments),
     payments: localStorage.getItem(REMOTE_READY_KEY) ? [] : structuredClone(defaultPayments),
-    notes: structuredClone(defaultNotes),
-    documents: structuredClone(defaultDocuments),
+    notes: localStorage.getItem(REMOTE_READY_KEY) ? [] : structuredClone(defaultNotes),
+    documents: localStorage.getItem(REMOTE_READY_KEY) ? [] : structuredClone(defaultDocuments),
     users: structuredClone(defaultUsers),
   };
 }
@@ -514,17 +514,21 @@ function applySupabaseSession(sessionUser) {
 
 async function loadRemoteDirectoryData() {
   try {
-    const [professionalsResult, patientsResult, appointmentsResult, paymentsResult] = await Promise.all([
+    const [professionalsResult, patientsResult, appointmentsResult, paymentsResult, notesResult, documentsResult] = await Promise.all([
       apiRequest("/api/legacy/professionals"),
       apiRequest("/api/legacy/patients"),
       apiRequest("/api/legacy/appointments"),
       apiRequest("/api/legacy/payments"),
+      apiRequest("/api/legacy/followups"),
+      apiRequest("/api/legacy/documents"),
     ]);
 
     state.professionals = professionalsResult.professionals || [];
     state.patients = patientsResult.patients || [];
     state.appointments = appointmentsResult.appointments || [];
     state.payments = paymentsResult.payments || [];
+    state.notes = notesResult.notes || [];
+    state.documents = documentsResult.documents || [];
     localStorage.setItem(REMOTE_READY_KEY, "true");
     normalizeState();
     render();
@@ -1367,7 +1371,7 @@ function openNoteDialog(patientId, noteId = "") {
   qs("#noteDialog").showModal();
 }
 
-function saveNote(event) {
+async function saveNote(event) {
   event.preventDefault();
   const patient = getPatient(qs("#notePatientId").value);
   if (!patient || !canEditNotes(patient)) return;
@@ -1388,11 +1392,20 @@ function saveNote(event) {
     fechaActualizacion: now,
     creadoPor: existing?.creadoPor || state.currentUser.username,
   };
-  upsert(state.notes, next);
-  qs("#noteDialog").close();
-  saveState();
-  openPatientFile(patient.id);
-  render();
+  try {
+    const saved = await apiRequest("/api/legacy/followups", {
+      method: "POST",
+      body: JSON.stringify(next),
+    });
+    upsert(state.notes, saved.note || next);
+    qs("#noteDialog").close();
+    saveState();
+    openPatientFile(patient.id);
+    render();
+  } catch (error) {
+    console.error(error);
+    showSystemError(error.message || "No se pudo guardar la nota.");
+  }
 }
 
 function openDocumentDialog(patientId, documentId = "") {
@@ -1408,7 +1421,7 @@ function openDocumentDialog(patientId, documentId = "") {
   qs("#documentDialog").showModal();
 }
 
-function saveDocument(event) {
+async function saveDocument(event) {
   event.preventDefault();
   if (!canEdit("documents")) return;
   const id = qs("#documentId").value || createId();
@@ -1421,22 +1434,38 @@ function saveDocument(event) {
     fechaCarga: state.documents.find((document) => document.id === id)?.fechaCarga || todayIso,
     cargadoPor: state.currentUser.username,
   };
-  upsert(state.documents, next);
-  qs("#documentDialog").close();
-  saveState();
-  openPatientFile(next.pacienteId);
-  render();
+  try {
+    const saved = await apiRequest("/api/legacy/documents", {
+      method: "POST",
+      body: JSON.stringify(next),
+    });
+    const savedDocument = saved.document || next;
+    upsert(state.documents, savedDocument);
+    qs("#documentDialog").close();
+    saveState();
+    openPatientFile(savedDocument.pacienteId);
+    render();
+  } catch (error) {
+    console.error(error);
+    showSystemError(error.message || "No se pudo guardar el documento.");
+  }
 }
 
-function deleteDocument() {
+async function deleteDocument() {
   const id = qs("#documentId").value;
   const document = state.documents.find((item) => item.id === id);
   if (!document || !canEdit("documents")) return;
-  state.documents = state.documents.filter((item) => item.id !== id);
-  qs("#documentDialog").close();
-  saveState();
-  openPatientFile(document.pacienteId);
-  render();
+  try {
+    await apiRequest(`/api/legacy/documents?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    state.documents = state.documents.filter((item) => item.id !== id);
+    qs("#documentDialog").close();
+    saveState();
+    openPatientFile(document.pacienteId);
+    render();
+  } catch (error) {
+    console.error(error);
+    showSystemError(error.message || "No se pudo eliminar el documento.");
+  }
 }
 
 function getFilteredPayments() {
@@ -1592,7 +1621,7 @@ function canEditNotes(patient) {
 function canEditNote(note) {
   if (!note) return false;
   if (state.currentUser?.role === "admin") return true;
-  return state.currentUser?.role === "profesional" && note.creadoPor === state.currentUser.username;
+  return state.currentUser?.role === "profesional" && note.profesionalId === state.currentUser.professionalId;
 }
 
 function canAccessPatient(patient) {
