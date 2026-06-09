@@ -307,7 +307,7 @@ function loadState() {
     patients: localStorage.getItem(REMOTE_READY_KEY) ? [] : structuredClone(defaultPatients),
     professionals: localStorage.getItem(REMOTE_READY_KEY) ? [] : structuredClone(defaultProfessionals),
     appointments: localStorage.getItem(REMOTE_READY_KEY) ? [] : structuredClone(defaultAppointments),
-    payments: structuredClone(defaultPayments),
+    payments: localStorage.getItem(REMOTE_READY_KEY) ? [] : structuredClone(defaultPayments),
     notes: structuredClone(defaultNotes),
     documents: structuredClone(defaultDocuments),
     users: structuredClone(defaultUsers),
@@ -514,15 +514,17 @@ function applySupabaseSession(sessionUser) {
 
 async function loadRemoteDirectoryData() {
   try {
-    const [professionalsResult, patientsResult, appointmentsResult] = await Promise.all([
+    const [professionalsResult, patientsResult, appointmentsResult, paymentsResult] = await Promise.all([
       apiRequest("/api/legacy/professionals"),
       apiRequest("/api/legacy/patients"),
       apiRequest("/api/legacy/appointments"),
+      apiRequest("/api/legacy/payments"),
     ]);
 
     state.professionals = professionalsResult.professionals || [];
     state.patients = patientsResult.patients || [];
     state.appointments = appointmentsResult.appointments || [];
+    state.payments = paymentsResult.payments || [];
     localStorage.setItem(REMOTE_READY_KEY, "true");
     normalizeState();
     render();
@@ -1220,7 +1222,7 @@ async function saveAppointment(event) {
     });
     const savedAppointment = saved.appointment || next;
     upsert(state.appointments, savedAppointment);
-    syncPaymentForAppointment(savedAppointment);
+    await syncPaymentForAppointment(savedAppointment);
     state.selectedDate = savedAppointment.fecha;
     state.agendaMonth = savedAppointment.fecha.slice(0, 7);
     qs("#appointmentDialog").close();
@@ -1247,9 +1249,14 @@ async function cancelAppointment() {
     });
     const savedAppointment = saved.appointment || { ...appointment, estado: "cancelado", estadoPago: "cancelado" };
     upsert(state.appointments, savedAppointment);
-    state.payments.filter((payment) => payment.turnoId === id).forEach((payment) => {
-      payment.estado = "cancelado";
-    });
+    await Promise.all(state.payments.filter((payment) => payment.turnoId === id).map(async (payment) => {
+      const nextPayment = { ...payment, estado: "cancelado" };
+      const savedPayment = await apiRequest("/api/legacy/payments", {
+        method: "POST",
+        body: JSON.stringify(nextPayment),
+      });
+      upsert(state.payments, savedPayment.payment || nextPayment);
+    }));
     qs("#appointmentDialog").close();
     saveState();
     render();
@@ -1292,7 +1299,7 @@ function fillPaymentAppointmentOptions(selectedId = "") {
   ], selectedId || "");
 }
 
-function savePayment(event) {
+async function savePayment(event) {
   event.preventDefault();
   if (!canEdit("payments")) return;
   const id = qs("#paymentId").value || createId();
@@ -1310,21 +1317,37 @@ function savePayment(event) {
     fechaPago: qs("#paymentDate").value,
     observaciones: qs("#paymentObservations").value.trim(),
   };
-  upsert(state.payments, next);
-  const appointment = state.appointments.find((item) => item.id === next.turnoId);
-  if (appointment) appointment.estadoPago = next.estado;
-  qs("#paymentDialog").close();
-  saveState();
-  render();
+  try {
+    const saved = await apiRequest("/api/legacy/payments", {
+      method: "POST",
+      body: JSON.stringify(next),
+    });
+    const savedPayment = saved.payment || next;
+    upsert(state.payments, savedPayment);
+    const appointment = state.appointments.find((item) => item.id === savedPayment.turnoId);
+    if (appointment) appointment.estadoPago = savedPayment.estado;
+    qs("#paymentDialog").close();
+    saveState();
+    render();
+  } catch (error) {
+    console.error(error);
+    showSystemError(error.message || "No se pudo guardar el pago.");
+  }
 }
 
-function deletePayment() {
+async function deletePayment() {
   const id = qs("#paymentId").value;
   if (!id || !canEdit("payments")) return;
-  state.payments = state.payments.filter((payment) => payment.id !== id);
-  qs("#paymentDialog").close();
-  saveState();
-  render();
+  try {
+    await apiRequest(`/api/legacy/payments?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    state.payments = state.payments.filter((payment) => payment.id !== id);
+    qs("#paymentDialog").close();
+    saveState();
+    render();
+  } catch (error) {
+    console.error(error);
+    showSystemError(error.message || "No se pudo eliminar el pago.");
+  }
 }
 
 function openNoteDialog(patientId, noteId = "") {
@@ -1431,23 +1454,25 @@ function getFilteredPayments() {
 }
 
 function getPaymentTotal(payment) {
+  if (payment.total !== undefined) return Number(payment.total || 0);
   return Number(payment.monto || 0) + Number(payment.importeCubierto || 0);
 }
 
 function getProfessionalSettlement(payment) {
+  if (payment.liquidacionProfesional !== undefined) return Number(payment.liquidacionProfesional || 0);
   return Math.round(getPaymentTotal(payment) * 0.4);
 }
 
 function getCenterSettlement(payment) {
+  if (payment.liquidacionVientos !== undefined) return Number(payment.liquidacionVientos || 0);
   return getPaymentTotal(payment) - getProfessionalSettlement(payment);
 }
 
 function syncPaymentsFromAppointments() {
-  state.appointments.forEach(syncPaymentForAppointment);
   state.payments = state.payments.filter((payment) => !payment.turnoId || state.appointments.some((appointment) => appointment.id === payment.turnoId));
 }
 
-function syncPaymentForAppointment(appointment) {
+async function syncPaymentForAppointment(appointment) {
   const existing = state.payments.find((payment) => payment.turnoId === appointment.id);
   if (existing) {
     existing.pacienteId = appointment.pacienteId;
@@ -1456,9 +1481,18 @@ function syncPaymentForAppointment(appointment) {
     existing.obraSocial ||= "Particular";
     existing.importeCubierto = Number(existing.importeCubierto || 0);
     existing.estado = appointment.estadoPago;
+    try {
+      const saved = await apiRequest("/api/legacy/payments", {
+        method: "POST",
+        body: JSON.stringify(existing),
+      });
+      upsert(state.payments, saved.payment || existing);
+    } catch (error) {
+      console.error(error);
+    }
     return;
   }
-  state.payments.push({
+  const next = {
     id: createId(),
     pacienteId: appointment.pacienteId,
     profesionalId: appointment.profesionalId,
@@ -1471,7 +1505,17 @@ function syncPaymentForAppointment(appointment) {
     medioPago: "otro",
     fechaPago: "",
     observaciones: "",
-  });
+  };
+  try {
+    const saved = await apiRequest("/api/legacy/payments", {
+      method: "POST",
+      body: JSON.stringify(next),
+    });
+    upsert(state.payments, saved.payment || next);
+  } catch (error) {
+    console.error(error);
+    upsert(state.payments, next);
+  }
 }
 
 function exportPaymentsSpreadsheet() {
